@@ -1,0 +1,12 @@
+name = "trellis"
+version = "1.0.0"
+
+description = "A simple Gleam library for pretty printing tabular data!"
+licences = ["MIT"]
+repository = { type = "github", user = "ethanthoma", repo = "trellis" }
+
+[dependencies]
+gleam_stdlib = ">= 0.44.0 and < 2.0.0"
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"

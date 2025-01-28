@@ -1,0 +1,16 @@
+*
+
+!README.md
+!LICENSE
+!.gitignore
+
+!gleam.toml
+!manifest.toml
+!src/
+!src/*.gleam
+!test/
+!test/*.gleam
+
+# dev
+!flake.nix
+!flake.lock
