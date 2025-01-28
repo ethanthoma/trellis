@@ -50,7 +50,7 @@ pub fn main() {
 ```
 
 The output looks like:
-```
+<pre><code style="font-family: monospace;" class="language-plaintext">
 ┌──────────┬──────────────────┬────────┬───────────┐
 │   name   │ the person's age │ senior │   happy   │
 ├──────────┼──────────────────┼────────┼───────────┤
@@ -66,7 +66,7 @@ The output looks like:
 │ Mia      │        45        │  False │     Happy │
 │ James    │        22        │  False │     Happy │
 └──────────┴──────────────────┴────────┴───────────┘
-```
+</code></pre>
 
 Further documentation can be found at <https://hexdocs.pm/trellis>.
 
