@@ -2,27 +2,7 @@ import gleam/int
 import gleam/list
 import gleam/string
 
-const vertical = "│"
-
-const horizontal = "─"
-
-const top_left = "┌"
-
-const top_right = "┐"
-
-const middle_left = "┤"
-
-const middle_right = "├"
-
-const middle_bottom = "┴"
-
-const middle_top = "┬"
-
-const bottom_left = "└"
-
-const bottom_right = "┘"
-
-const cross = "┼"
+import trellis/style
 
 /// A type representing a formatted table with headers and rows of data
 /// 
@@ -41,7 +21,7 @@ const cross = "┼"
 ///   })
 /// ```
 pub type Table(value) {
-  Table(columns: List(Column(value)), rows: List(value))
+  Table(columns: List(Column(value)), rows: List(value), style: style.Style)
 }
 
 /// A type representing a column in the table with header, alignment, and value getter
@@ -58,7 +38,15 @@ pub type Align {
 
 /// Creates a new table with the given rows of data
 pub fn table(data rows: List(value)) -> Table(value) {
-  Table(columns: [], rows: rows)
+  Table(columns: [], rows: rows, style: style.Line)
+}
+
+/// Set the style of the table
+pub fn style(
+  table table: Table(value),
+  style style: style.Style,
+) -> Table(value) {
+  Table(..table, style:)
 }
 
 /// Helper function to wrap a function for use in column definitions
@@ -71,13 +59,13 @@ pub fn param(f: fn(a) -> b) -> fn(a) -> b {
 
 /// Adds a new column to the table definition
 pub fn with(
-  builder: Table(value),
+  table table: Table(value),
   header header: String,
   align align: Align,
   getter getter: fn(value) -> String,
 ) -> Table(value) {
-  let Table(columns: columns, rows: rows) = builder
-  Table(columns: [Column(header, align, getter), ..columns], rows: rows)
+  let Table(columns:, rows: _, style: _) = table
+  Table(..table, columns: [Column(header, align, getter), ..columns])
 }
 
 /// Calculates the required width for each column based on content
@@ -94,13 +82,12 @@ fn calculate_widths(headers: List(String), values: List(String)) -> List(Int) {
   })
 }
 
-
 /// Converts the table to a formatted string representation
 /// 
 /// Creates a string with Unicode box-drawing characters, properly aligned content,
 /// and separators between header and rows
 pub fn to_string(table: Table(value)) -> String {
-  let Table(columns: columns, rows: rows) = table
+  let Table(columns:, rows:, style:) = table
   let columns = list.reverse(columns)
 
   let headers = list.map(columns, fn(col) { col.header })
@@ -111,22 +98,26 @@ pub fn to_string(table: Table(value)) -> String {
     })
   let widths = calculate_widths(headers, values)
 
-  let separator_top = make_separator(widths, True, True)
+  let separator_top =
+    make_separator(style:, widths:, is_header: True, is_top: True)
   let header_row =
     make_row(
+      style,
       list.map(list.range(1, list.length(columns)), fn(_) { Center }),
       widths,
       headers,
     )
-  let separator_header = make_separator(widths, True, False)
+  let separator_header =
+    make_separator(style:, widths:, is_header: True, is_top: False)
 
   let body_rows =
     list.map(rows, fn(row) {
       let row_values = list.map(columns, fn(col) { col.getter(row) })
-      make_row(aligns, widths, row_values)
+      make_row(style, aligns, widths, row_values)
     })
 
-  let separator_bottom = make_separator(widths, False, False)
+  let separator_bottom =
+    make_separator(style:, widths:, is_header: False, is_top: False)
 
   [separator_top, header_row, separator_header]
   |> list.append(body_rows)
@@ -135,27 +126,35 @@ pub fn to_string(table: Table(value)) -> String {
 }
 
 /// Creates a horizontal separator line for the table
-fn make_separator(columns: List(Int), is_header: Bool, is_top: Bool) -> String {
-  let start = case is_top, is_header {
-    True, _ -> top_left
-    False, True -> middle_right
-    False, False -> bottom_left
-  }
+fn make_separator(
+  style style: style.Style,
+  widths widths: List(Int),
+  is_header is_header: Bool,
+  is_top is_top: Bool,
+) -> String {
+  let style.StyleGuide(
+    top_left:,
+    top_middle:,
+    top_right:,
+    middle_left:,
+    middle_right:,
+    bottom_left:,
+    bottom_middle:,
+    bottom_right:,
+    cross:,
+    horizontal:,
+    vertical: _,
+  ) = style.style(style:)
 
-  let end = case is_top, is_header {
-    True, _ -> top_right
-    False, True -> middle_left
-    False, False -> bottom_right
-  }
-
-  let middle = case is_top, is_header {
-    True, _ -> middle_top
-    False, True -> cross
-    False, False -> middle_bottom
+  let #(start, middle, end) = case is_top, is_header {
+    True, _ -> #(top_left, top_middle, top_right)
+    False, True -> #(middle_right, cross, middle_left)
+    False, False -> #(bottom_left, bottom_middle, bottom_right)
   }
 
   let line =
-    list.fold(columns, start, fn(acc, col) {
+    widths
+    |> list.fold(start, fn(acc, col) {
       acc <> string.repeat(horizontal, col + 2) <> middle
     })
 
@@ -164,10 +163,13 @@ fn make_separator(columns: List(Int), is_header: Bool, is_top: Bool) -> String {
 
 /// Creates a row in the table with properly aligned content
 fn make_row(
+  style: style.Style,
   aligns: List(Align),
   widths: List(Int),
   values: List(String),
 ) -> String {
+  let vertical = style.style(style:).vertical
+
   let row =
     {
       use #(align, width), value <- list.map2(
