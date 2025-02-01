@@ -2,6 +2,7 @@ import gleam/bool
 import gleam/int
 import gleam/io
 import gleam/list
+import trellis/style
 
 import trellis.{Center, Left, Right}
 
@@ -26,6 +27,7 @@ pub fn print_row_test() {
   }
 
   trellis.table(data:)
+  |> trellis.style(style.Round)
   |> trellis.with("name", Left, {
     use Row(name:, age: _, happy: _) <- trellis.param
     name

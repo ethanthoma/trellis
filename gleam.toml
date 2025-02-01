@@ -1,5 +1,5 @@
 name = "trellis"
-version = "1.0.0"
+version = "1.1.1"
 
 description = "A simple Gleam library for pretty printing tabular data!"
 licences = ["MIT"]

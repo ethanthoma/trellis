@@ -25,6 +25,7 @@ pub fn main() {
   }
 
   trellis.table(data:)
+  |> trellis.style(style.Round)
   |> trellis.with("name", Left, {
     use Row(name:, age: _, happy: _) <- trellis.param
     name
@@ -51,21 +52,21 @@ pub fn main() {
 
 The output looks like:
 <pre><code style="font-family: monospace;" class="language-plaintext">
-┌──────────┬──────────────────┬────────┬───────────┐
-│   name   │ the person's age │ senior │   happy   │
-├──────────┼──────────────────┼────────┼───────────┤
-│ Mia      │        67        │   True │     Happy │
-│ Noah     │        35        │  False │     Happy │
-│ Isabella │        17        │  False │ Not Happy │
-│ Amelia   │        74        │   True │     Happy │
-│ James    │        62        │  False │ Not Happy │
-│ William  │        58        │  False │ Not Happy │
-│ Benjamin │        6         │  False │ Not Happy │
-│ Isabella │        3         │  False │     Happy │
-│ Liam     │        24        │  False │     Happy │
-│ Mia      │        45        │  False │     Happy │
-│ James    │        22        │  False │     Happy │
-└──────────┴──────────────────┴────────┴───────────┘
+╭───────────┬──────────────────┬────────┬───────────╮
+│   name    │ the person's age │ senior │   happy   │
+├───────────┼──────────────────┼────────┼───────────┤
+│ Michael   │        16        │  False │ Not Happy │
+│ Vitor     │        54        │  False │     Happy │
+│ Ellen     │        63        │  False │ Not Happy │
+│ Ellen     │        19        │  False │ Not Happy │
+│ Vitor     │        28        │  False │     Happy │
+│ Michael   │        59        │  False │ Not Happy │
+│ Ellen     │        60        │  False │     Happy │
+│ Vitor     │        60        │  False │ Not Happy │
+│ Michael   │        74        │   True │     Happy │
+│ Vitor     │        12        │  False │     Happy │
+│ Ellen     │        16        │  False │     Happy │
+╰───────────┴──────────────────┴────────┴───────────╯
 </code></pre>
 
 Further documentation can be found at <https://hexdocs.pm/trellis>.

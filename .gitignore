@@ -8,6 +8,8 @@
 !manifest.toml
 !src/
 !src/*.gleam
+!src/trellis
+!src/trellis/*.gleam
 !test/
 !test/*.gleam
 
