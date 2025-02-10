@@ -6,10 +6,12 @@ A simple Gleam library for pretty printing tabular data!
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/trellis/)
 
 ```sh
-gleam add trellis@1
+gleam add trellis@2
 ```
 ```gleam
 import trellis
+import trellis/column.{Left, Right}
+import trellis/style
 
 pub fn main() {
   let names = ["Michael", "Vitor", "Ellen"]
@@ -26,25 +28,40 @@ pub fn main() {
 
   trellis.table(data:)
   |> trellis.style(style.Round)
-  |> trellis.with("name", Left, {
-    use Row(name:, age: _, happy: _) <- trellis.param
-    name
-  })
-  |> trellis.with("the person's age", Center, {
-    use Row(name: _, age:, happy: _) <- trellis.param
-    age |> int.to_string
-  })
-  |> trellis.with("senior", Right, {
-    use Row(name: _, age:, happy: _) <- trellis.param
-    { age >= 65 } |> bool.to_string
-  })
-  |> trellis.with("happy", Right, {
-    use Row(name: _, age: _, happy:) <- trellis.param
-    case happy {
-      True -> "Happy"
-      False -> "Not Happy"
-    }
-  })
+  |> trellis.with(
+    column.new("name")
+    |> column.align(Left)
+    |> column.render({
+      use Row(name:, age: _, happy: _) <- trellis.param
+      name
+    }),
+  )
+  |> trellis.with(
+    column.new("the person's age")
+    |> column.render({
+      use Row(name: _, age:, happy: _) <- trellis.param
+      age |> int.to_string
+    }),
+  )
+  |> trellis.with(
+    column.new("senior")
+    |> column.align(Right)
+    |> column.render({
+      use Row(name: _, age:, happy: _) <- trellis.param
+      { age >= 65 } |> bool.to_string
+    }),
+  )
+  |> trellis.with(
+    column.new("happy")
+    |> column.align(Right)
+    |> column.render({
+      use Row(name: _, age: _, happy:) <- trellis.param
+      case happy {
+        True -> "Happy"
+        False -> "Not Happy"
+      }
+    }),
+  )
   |> trellis.to_string
   |> io.println
 }

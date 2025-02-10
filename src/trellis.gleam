@@ -1,7 +1,9 @@
 import gleam/int
 import gleam/list
+import gleam/option
 import gleam/string
 
+import trellis/column.{type Align, type Column, Center, Column, Left, Right}
 import trellis/style
 
 /// A type representing a formatted table with headers and rows of data
@@ -24,16 +26,9 @@ pub type Table(value) {
   Table(columns: List(Column(value)), rows: List(value), style: style.Style)
 }
 
-/// A type representing a column in the table with header, alignment, and value getter
-pub type Column(value) {
-  Column(header: String, align: Align, getter: fn(value) -> String)
-}
-
-/// Alignment options for column content
-pub type Align {
-  Left
-  Right
-  Center
+// Helper type to store cell content split into lines
+type CellContent {
+  CellContent(lines: List(String), width: Int, height: Int)
 }
 
 /// Creates a new table with the given rows of data
@@ -60,25 +55,116 @@ pub fn param(f: fn(a) -> b) -> fn(a) -> b {
 /// Adds a new column to the table definition
 pub fn with(
   table table: Table(value),
-  header header: String,
-  align align: Align,
-  getter getter: fn(value) -> String,
+  column column: Column(value),
 ) -> Table(value) {
   let Table(columns:, rows: _, style: _) = table
-  Table(..table, columns: [Column(header, align, getter), ..columns])
+  Table(..table, columns: [column, ..columns])
+}
+
+fn cell_content(text: String, width width: option.Option(Int)) -> CellContent {
+  let newline_splits = string.split(text, on: "\n")
+
+  let lines = case width {
+    option.Some(width) -> {
+      list.flat_map(newline_splits, fn(line) { wrap_text(line, width) })
+    }
+    option.None -> newline_splits
+  }
+
+  let content_width =
+    list.fold(lines, 0, fn(acc, line) { int.max(acc, string.length(line)) })
+
+  let final_width = case width {
+    option.Some(max) -> int.min(content_width, max)
+    option.None -> content_width
+  }
+
+  CellContent(lines: lines, width: final_width, height: list.length(lines))
 }
 
 /// Calculates the required width for each column based on content
 /// 
 /// Takes into account both header width and the maximum width of values
 /// in each column to determine the appropriate column widths
-fn calculate_widths(headers: List(String), values: List(String)) -> List(Int) {
-  let lengths = list.sized_chunk(values, list.length(headers))
+fn calculate_widths(
+  headers: List(String),
+  values: List(String),
+  widths: List(option.Option(Int)),
+) -> List(Int) {
+  let header_cells = list.map2(headers, widths, cell_content)
 
-  list.map2(headers, list.transpose(lengths), fn(header, col_values) {
-    let max_value_length =
-      list.fold(col_values, 0, fn(acc, val) { int.max(acc, string.length(val)) })
-    int.max(string.length(header), max_value_length)
+  let columns = list.sized_chunk(values, list.length(headers))
+  let transposed_columns = list.transpose(columns)
+
+  let min_column_widths =
+    list.map(transposed_columns, fn(col_values) {
+      list.fold(col_values, 0, fn(acc, val) {
+        int.max(acc, calculate_min_width(val))
+      })
+    })
+
+  let value_cells =
+    list.map2(transposed_columns, widths, fn(col_values, width) {
+      list.map(col_values, fn(value) { cell_content(value, width) })
+    })
+
+  use #(header, max_width), #(column_cells, min_width) <- list.map2(
+    list.zip(header_cells, widths),
+    list.zip(value_cells, min_column_widths),
+  )
+
+  let natural_width =
+    list.fold(column_cells, header.width, fn(acc, cell) {
+      int.max(acc, cell.width)
+    })
+
+  let width = int.max(natural_width, min_width)
+
+  case max_width {
+    option.Some(max_width) -> int.max(min_width, int.min(width, max_width))
+    option.None -> width
+  }
+}
+
+fn make_multi_line_row(
+  style style: style.Style,
+  aligns aligns: List(Align),
+  widths widths: List(Int),
+  cell_contents cell_contents: List(CellContent),
+) -> List(String) {
+  let vertical = style.style(style: style).vertical
+
+  let max_height =
+    list.fold(cell_contents, 0, fn(acc, cell) { int.max(acc, cell.height) })
+
+  list.range(0, max_height - 1)
+  |> list.map(fn(line_num) {
+    let parts =
+      list.map2(list.zip(aligns, widths), cell_contents, fn(tup, cell) {
+        #(tup.0, tup.1, cell)
+      })
+
+    let line_parts =
+      list.map(parts, fn(part) {
+        let #(align, width, cell) = part
+
+        let content =
+          list.index_fold(cell.lines, "", fn(acc, line, i) {
+            case line_num == i {
+              True -> line
+              _ -> acc
+            }
+          })
+
+        let padded = case align {
+          Left -> pad_right(content, width)
+          Right -> pad_left(content, width)
+          Center -> pad_center(content, width)
+        }
+        " " <> padded <> " "
+      })
+
+    vertical <> string.join(line_parts, vertical) <> vertical
   })
 }
 
@@ -87,39 +173,49 @@ fn calculate_widths(headers: List(String), values: List(String)) -> List(Int) {
 /// Creates a string with Unicode box-drawing characters, properly aligned content,
 /// and separators between header and rows
 pub fn to_string(table: Table(value)) -> String {
-  let Table(columns:, rows:, style:) = table
+  let Table(columns: columns, rows: rows, style: style) = table
   let columns = list.reverse(columns)
 
-  let headers = list.map(columns, fn(col) { col.header })
-  let aligns = list.map(columns, fn(col) { col.align })
+  let headers = list.map(columns, fn(column) { column.header })
+  let aligns = list.map(columns, fn(column) { column.align })
+  let max_widths = list.map(columns, fn(column) { column.width })
+
   let values =
     list.flat_map(rows, fn(row) {
       list.map(columns, fn(col) { col.getter(row) })
     })
-  let widths = calculate_widths(headers, values)
+
+  let widths = calculate_widths(headers, values, max_widths)
 
   let separator_top =
     make_separator(style:, widths:, is_header: True, is_top: True)
-  let header_row =
-    make_row(
-      style,
-      list.map(list.range(1, list.length(columns)), fn(_) { Center }),
-      widths,
-      headers,
-    )
   let separator_header =
     make_separator(style:, widths:, is_header: True, is_top: False)
-
-  let body_rows =
-    list.map(rows, fn(row) {
-      let row_values = list.map(columns, fn(col) { col.getter(row) })
-      make_row(style, aligns, widths, row_values)
-    })
-
   let separator_bottom =
     make_separator(style:, widths:, is_header: False, is_top: False)
 
-  [separator_top, header_row, separator_header]
+  let header_cells = list.map2(headers, max_widths, cell_content)
+  let header_rows =
+    make_multi_line_row(
+      style:,
+      aligns: list.map(list.range(1, list.length(columns)), fn(_) { Center }),
+      widths:,
+      cell_contents: header_cells,
+    )
+
+  let body_rows =
+    list.flat_map(rows, fn(row) {
+      let cell_contents =
+        list.map2(columns, max_widths, fn(col, w) {
+          cell_content(col.getter(row), w)
+        })
+
+      make_multi_line_row(style:, aligns:, widths:, cell_contents:)
+    })
+
+  [separator_top]
+  |> list.append(header_rows)
+  |> list.append([separator_header])
   |> list.append(body_rows)
   |> list.append([separator_bottom])
   |> string.join("\n")
@@ -161,36 +257,6 @@ fn make_separator(
   string.slice(line, 0, string.length(line) - 1) <> end
 }
 
-/// Creates a row in the table with properly aligned content
-fn make_row(
-  style: style.Style,
-  aligns: List(Align),
-  widths: List(Int),
-  values: List(String),
-) -> String {
-  let vertical = style.style(style:).vertical
-
-  let row =
-    {
-      use #(align, width), value <- list.map2(
-        {
-          use align, width <- list.map2(aligns, widths)
-          #(align, width)
-        },
-        values,
-      )
-      let padded = case align {
-        Left -> pad_right(value, width)
-        Right -> pad_left(value, width)
-        Center -> pad_center(value, width)
-      }
-      " " <> padded <> " "
-    }
-    |> string.join(vertical)
-
-  vertical <> row <> vertical
-}
-
 /// Left-pads a string with spaces to reach the specified width
 fn pad_left(text: String, width: Int) -> String {
   let padding = width - string.length(text)
@@ -209,4 +275,57 @@ fn pad_center(text: String, width: Int) -> String {
   let left = padding / 2
   let right = padding - left
   string.repeat(" ", left) <> text <> string.repeat(" ", right)
+}
+
+fn wrap_text(text: String, max_width: Int) -> List(String) {
+  let min_width = calculate_min_width(text)
+
+  let effective_width = int.max(max_width, min_width)
+
+  case string.length(text) <= effective_width {
+    True -> [text]
+    False -> {
+      let words = string.split(text, on: " ")
+      do_wrap(words: words, max_width: effective_width, current: "", lines: [])
+    }
+  }
+}
+
+fn do_wrap(
+  words words: List(String),
+  max_width max_width: Int,
+  current current: String,
+  lines lines: List(String),
+) -> List(String) {
+  case words {
+    [] ->
+      case current {
+        "" -> list.reverse(lines)
+        _ -> list.reverse([string.trim(current), ..lines])
+      }
+    [word, ..rest] -> {
+      let with_space = case current {
+        "" -> word
+        _ -> current <> " " <> word
+      }
+
+      case string.length(with_space) <= max_width {
+        True -> do_wrap(rest, max_width, with_space, lines)
+        False ->
+          case current {
+            "" -> do_wrap(rest, max_width, word, lines)
+            _ ->
+              do_wrap([word, ..rest], max_width, "", [
+                string.trim(current),
+                ..lines
+              ])
+          }
+      }
+    }
+  }
+}
+
+fn calculate_min_width(text: String) -> Int {
+  string.split(text, on: " ")
+  |> list.fold(0, fn(acc, word) { int.max(acc, string.length(word)) })
 }
